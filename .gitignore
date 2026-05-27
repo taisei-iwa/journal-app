@@ -1,0 +1,8 @@
+# 依存・OS・ログ
+node_modules/
+.DS_Store
+*.log
+
+# 旧サーバーレス関数(現行フロントは Obsidian URI 保存方式。Netlify への自動デプロイ対象外)
+# 復活させたい場合はこの行を外して再 commit する
+netlify/

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="日誌">
+  <meta name="theme-color" content="#f7f4ee" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1e1c1a" media="(prefers-color-scheme: dark)">
+  <title>日誌</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+</head>
+<body>
+  <header>
+    <div class="date-display" id="date-display"></div>
+    <button class="header-save-btn" id="header-save-btn">保存する →</button>
+  </header>
+
+  <nav class="tabs" id="tab-nav">
+    <button class="tab-btn active" data-section="WORK">WORK</button>
+  </nav>
+
+  <main>
+    <div class="section" id="section-WORK"></div>
+
+    <!-- 保存パネル（完了後に表示） -->
+    <div class="section hidden" id="section-save">
+      <div class="save-panel-intro">
+        <p>ボタンをタップすると Obsidian で<br>今日の日誌が 1 ファイル開きます</p>
+      </div>
+      <div id="save-buttons-list"></div>
+      <button class="back-btn" id="back-btn">← 入力に戻る</button>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
