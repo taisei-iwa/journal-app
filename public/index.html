@@ -5,10 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="日誌">
-  <meta name="theme-color" content="#f7f4ee" media="(prefers-color-scheme: light)">
+  <meta name="apple-mobile-web-app-title" content="Daily Notes">
+  <meta name="theme-color" content="#F5EFE3" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1e1c1a" media="(prefers-color-scheme: dark)">
-  <title>日誌</title>
+  <title>Daily Notes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+JP:wght@300;400;500;600&family=Noto+Serif+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-180.png">
@@ -19,7 +22,10 @@
   <div id="sr-announce" role="status" aria-live="polite" class="sr-only"></div>
 
   <header>
-    <div class="date-display" id="date-display"></div>
+    <div class="brand-block">
+      <div class="brand">Daily Notes</div>
+      <div class="date-display" id="date-display"></div>
+    </div>
     <button class="header-save-btn" id="header-save-btn">保存する <span aria-hidden="true">→</span></button>
   </header>
 

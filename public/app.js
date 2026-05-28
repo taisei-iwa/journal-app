@@ -35,6 +35,10 @@ const QUESTIONS = {
 const date = todayString();
 let answers = {
   WORK: {
+    // Daily Notes: 「最初から今日の仕事について書き出せる」ため、
+    // did_work の既定値を 'y' にしておく。works ブロックが初回から表示される。
+    // loadFromStorage で既存の保存があれば、そちらが優先される。
+    did_work: 'y',
     works: [{}],
     customer_activities: [{}],
     artists: [{}],
@@ -428,22 +432,31 @@ function customerFilePath(name) { return `顧客/${name}_${date}`; }
 // 構造化 Markdown でまとめる。気づき/失敗/顧客/作家への振り分けは週次レビュー
 // (Claude_KB の kb-* サブエージェント)が担当する。
 function showSavePanel() {
-  document.getElementById('tab-nav').classList.add('hidden');
-  document.getElementById('section-WORK').classList.add('hidden');
-  const panel = document.getElementById('section-save');
-  panel.classList.remove('hidden');
+  const apply = () => {
+    document.getElementById('tab-nav').classList.add('hidden');
+    document.getElementById('section-WORK').classList.add('hidden');
+    const panel = document.getElementById('section-save');
+    panel.classList.remove('hidden');
 
-  const list = document.getElementById('save-buttons-list');
-  list.innerHTML = '';
+    const list = document.getElementById('save-buttons-list');
+    list.innerHTML = '';
 
-  addSaveLink(list, 'Obsidian で日誌を開く', journalPath(), generateJournalContent());
+    addSaveLink(list, 'Obsidian で日誌を開く', journalPath(), generateJournalContent());
 
-  // a11y: パネル表示後、最初の操作対象にフォーカスを移す
-  // (キーボードユーザがヘッダーから Tab で辿らず済む)
-  requestAnimationFrame(() => {
-    const first = panel.querySelector('a, button');
-    if (first) first.focus();
-  });
+    // a11y: パネル表示後、最初の操作対象にフォーカスを移す
+    // (キーボードユーザがヘッダーから Tab で辿らず済む)
+    requestAnimationFrame(() => {
+      const first = panel.querySelector('a, button');
+      if (first) first.focus();
+    });
+  };
+
+  // View Transitions: 入力 → 保存パネルの遷移を視覚的につなぐ
+  if (document.startViewTransition) {
+    document.startViewTransition(apply);
+  } else {
+    apply();
+  }
 }
 
 function addSaveLink(container, label, filePath, content) {
@@ -887,9 +900,16 @@ function init() {
   document.getElementById('header-save-btn').addEventListener('click', showSavePanel);
 
   document.getElementById('back-btn').addEventListener('click', () => {
-    document.getElementById('tab-nav').classList.remove('hidden');
-    document.getElementById('section-save').classList.add('hidden');
-    switchTab(currentSection);
+    const apply = () => {
+      document.getElementById('tab-nav').classList.remove('hidden');
+      document.getElementById('section-save').classList.add('hidden');
+      switchTab(currentSection);
+    };
+    if (document.startViewTransition) {
+      document.startViewTransition(apply);
+    } else {
+      apply();
+    }
   });
 
   renderSection('WORK');
