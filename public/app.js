@@ -430,12 +430,20 @@ function customerFilePath(name) { return `顧客/${name}_${date}`; }
 function showSavePanel() {
   document.getElementById('tab-nav').classList.add('hidden');
   document.getElementById('section-WORK').classList.add('hidden');
-  document.getElementById('section-save').classList.remove('hidden');
+  const panel = document.getElementById('section-save');
+  panel.classList.remove('hidden');
 
   const list = document.getElementById('save-buttons-list');
   list.innerHTML = '';
 
-  addSaveLink(list, 'Obsidian で日誌を開く →', journalPath(), generateJournalContent());
+  addSaveLink(list, 'Obsidian で日誌を開く', journalPath(), generateJournalContent());
+
+  // a11y: パネル表示後、最初の操作対象にフォーカスを移す
+  // (キーボードユーザがヘッダーから Tab で辿らず済む)
+  requestAnimationFrame(() => {
+    const first = panel.querySelector('a, button');
+    if (first) first.focus();
+  });
 }
 
 function addSaveLink(container, label, filePath, content) {
@@ -444,12 +452,28 @@ function addSaveLink(container, label, filePath, content) {
   const a = document.createElement('a');
   a.href = obsidianURI(filePath, content);
   a.className = 'save-link' + (alreadySaved ? ' done' : '');
-  a.textContent = alreadySaved ? `✓ ${label}` : label;
+
+  // a11y: ラベルと矢印を分離。矢印は装飾扱い(SR に読ませない)
+  const labelSpan = document.createElement('span');
+  labelSpan.textContent = label;
+  a.appendChild(labelSpan);
+
+  const arrow = document.createElement('span');
+  arrow.textContent = ' →';
+  arrow.setAttribute('aria-hidden', 'true');
+  a.appendChild(arrow);
+
+  // a11y: ✓ は CSS の ::before で視覚化、SR には aria-label で状態を伝える
+  a.setAttribute('aria-label', alreadySaved ? `保存済み: ${label}` : label);
+
   a.addEventListener('click', () => {
     localStorage.setItem(savedKey, '1');
     setTimeout(() => {
       a.classList.add('done');
-      a.textContent = `✓ ${label}`;
+      a.setAttribute('aria-label', `保存済み: ${label}`);
+      // a11y: ライブ領域でアナウンス
+      const announce = document.getElementById('sr-announce');
+      if (announce) announce.textContent = '日誌を保存しました';
     }, 300);
   });
   container.appendChild(a);

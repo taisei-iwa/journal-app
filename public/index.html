@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="日誌">
@@ -15,9 +15,12 @@
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 </head>
 <body>
+  <!-- SR 用ライブ領域(保存完了等を読み上げ) -->
+  <div id="sr-announce" role="status" aria-live="polite" class="sr-only"></div>
+
   <header>
     <div class="date-display" id="date-display"></div>
-    <button class="header-save-btn" id="header-save-btn">保存する →</button>
+    <button class="header-save-btn" id="header-save-btn">保存する <span aria-hidden="true">→</span></button>
   </header>
 
   <nav class="tabs" id="tab-nav">
@@ -33,7 +36,7 @@
         <p>ボタンをタップすると Obsidian で<br>今日の日誌が 1 ファイル開きます</p>
       </div>
       <div id="save-buttons-list"></div>
-      <button class="back-btn" id="back-btn">← 入力に戻る</button>
+      <button class="back-btn" id="back-btn"><span aria-hidden="true">←</span> 入力に戻る</button>
     </div>
   </main>
 

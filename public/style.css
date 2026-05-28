@@ -10,10 +10,12 @@
   --border: #e8e3da;
   --border-strong: #d8d2c5;
   --text: #23201d;
-  --text-muted: #8a857d;
-  --accent: #cc785c;
+  --text-muted: #6b665e;            /* a11y: 旧 #8a857d (3.4:1) → 5.0:1 */
+  --accent: #cc785c;                /* ブランド色。タブ・境界・ハイライトで使用 */
   --accent-soft: #f3e3d9;
   --accent-strong: #b8624a;
+  --accent-cta-bg: #a85436;         /* a11y: 白文字との CTA 背景。4.9:1 */
+  --accent-cta-bg-hover: #8a4128;   /* a11y: CTA ホバー。7.2:1 */
   --danger: #b14a3c;
   --radius: 8px;
   --radius-sm: 6px;
@@ -29,10 +31,12 @@
     --border: #383330;
     --border-strong: #4a443f;
     --text: #ebe5da;
-    --text-muted: #8a857d;
+    --text-muted: #9a9285;           /* a11y: ダーク背景で 5.1:1 */
     --accent: #d18a72;
     --accent-soft: #3a2a22;
     --accent-strong: #e2a08a;
+    --accent-cta-bg: #b8624a;        /* a11y: ダーク時 CTA。白文字で 4.6:1 */
+    --accent-cta-bg-hover: #a04d3a;
     --danger: #d97a6c;
   }
 }
@@ -77,7 +81,7 @@ header {
 .header-save-btn {
   min-height: var(--tap-min);
   padding: 0 18px;
-  background: var(--accent);
+  background: var(--accent-cta-bg);
   color: #fff;
   border: none;
   border-radius: var(--radius);
@@ -87,7 +91,7 @@ header {
   -webkit-tap-highlight-color: transparent;
   transition: background 0.15s;
 }
-.header-save-btn:hover { background: var(--accent-strong); }
+.header-save-btn:hover { background: var(--accent-cta-bg-hover); }
 .header-save-btn:active { opacity: 0.85; }
 
 /* ---- Tabs ---- */
@@ -241,8 +245,8 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
   justify-content: center;
   min-height: var(--tap-min);
   padding: 16px 20px;
-  background: var(--accent);
-  border: 1px solid var(--accent);
+  background: var(--accent-cta-bg);
+  border: 1px solid var(--accent-cta-bg);
   border-radius: var(--radius);
   color: #fff;
   font-size: 15px;
@@ -253,7 +257,13 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
   -webkit-tap-highlight-color: transparent;
 }
 
-.save-link:active { background: var(--accent-strong); }
+.save-link:hover { background: var(--accent-cta-bg-hover); border-color: var(--accent-cta-bg-hover); }
+.save-link:active { background: var(--accent-cta-bg-hover); }
+
+/* a11y: 保存済みの ✓ は視覚専用。SR には aria-label「保存済み: ...」で伝える */
+.save-link.done::before {
+  content: '✓\00a0';
+}
 
 .save-link.done {
   border-color: var(--border-strong);
@@ -385,4 +395,33 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+
+/* ---- A11y: 共通フォーカスリング ----
+   キーボード操作時のみ表示(マウスクリックでは出ない)。
+   focus indicator は WCAG 2.4.11 で 3:1 必要。--accent-strong (#b8624a) は白に対し 4.2:1。 */
+.header-save-btn:focus-visible,
+.save-link:focus-visible,
+.back-btn:focus-visible,
+.tab-btn:focus-visible,
+.yn-btn:focus-visible,
+.order-delete-btn:focus-visible,
+.kb-chip:focus-visible,
+textarea:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+/* ---- A11y: 視覚的に隠すが SR は読む ---- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
