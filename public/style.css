@@ -218,11 +218,15 @@ main {
   flex: 1; position: relative; height: 50px; border-radius: 15px;
   border: 1.5px solid var(--field-border); background: var(--field-bg); color: var(--ink-2);
   font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; gap: 8px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; gap: 0; overflow: hidden;
   transition: transform .18s cubic-bezier(.2,.7,.2,1), border-color .2s, color .2s, box-shadow .25s, background .2s;
 }
 .seg button:active { transform: scale(.97); }
-.seg button .tick { width: 17px; height: 17px; opacity: 0; transform: scale(.6); transition: .25s; }
+/* 未選択時はチェックを幅 0 に畳んでラベルを中央に保つ */
+.seg button .tick {
+  width: 0; height: 17px; flex-shrink: 0; opacity: 0; transform: scale(.6);
+  transition: width .25s, margin .25s, opacity .25s, transform .25s;
+}
 .seg button.on {
   color: var(--ink); border-color: transparent; background: var(--surface-solid);
   box-shadow: 0 0 0 2px var(--green), 0 8px 20px color-mix(in srgb, var(--green) 26%, transparent);
@@ -230,7 +234,7 @@ main {
 @media (prefers-color-scheme: dark) {
   .seg button.on { background: color-mix(in srgb, var(--green-2) 16%, var(--surface-solid)); }
 }
-.seg button.on .tick { opacity: 1; transform: scale(1); color: var(--green-2); }
+.seg button.on .tick { width: 17px; margin-right: 8px; opacity: 1; transform: scale(1); color: var(--green-2); }
 .seg button.no.on { box-shadow: 0 0 0 2px var(--ink-3); }
 .seg button.no.on .tick { color: var(--ink-2); }
 

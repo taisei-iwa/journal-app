@@ -549,15 +549,22 @@ function makeField(labelText, opt) {
 function makeSeg(value, onChange) {
   const g = document.createElement('div');
   g.className = 'seg';
-  const mk = (val, label, cls) => {
-    const b = document.createElement('button');
+  const yes = document.createElement('button');
+  const no = document.createElement('button');
+  const mk = (b, val, label, cls) => {
     b.type = 'button';
     b.className = cls + (value === val ? ' on' : '');
     b.innerHTML = TICK_SVG + '<span>' + label + '</span>';
-    b.addEventListener('click', () => onChange(val));
-    return b;
+    b.addEventListener('click', () => {
+      // タップごとに両ボタンの点灯状態を更新(これが無いと色が変わらない)
+      yes.classList.toggle('on', val === 'y');
+      no.classList.toggle('on', val === 'n');
+      onChange(val);
+    });
   };
-  g.append(mk('y', 'はい', 'yes'), mk('n', 'いいえ', 'no'));
+  mk(yes, 'y', 'はい', 'yes');
+  mk(no, 'n', 'いいえ', 'no');
+  g.append(yes, no);
   return g;
 }
 
