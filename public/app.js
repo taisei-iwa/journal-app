@@ -16,23 +16,6 @@ const ENERGY_LABELS = ['低', '弱', '中', '強', '高'];
 const ARTIST_ERAS = ['江戸', '明治', '大正', '昭和', '平成', '令和', '不明'];
 const ARTIST_FIELDS = ['書家', '画家', '茶人', 'その他'];
 
-// ---- 質問定義 ----
-const QUESTIONS = {
-  WORK: [
-    { id: 'energy', text: '今日のエネルギー', type: 'scale5' },
-    { id: 'did_work', text: '今日は仕事をした？', type: 'yn' },
-    { id: 'works', type: 'works_list', showIf: { id: 'did_work', value: 'y' } },
-    { id: 'had_customer_contact', text: '今日、顧客とのやり取りはあった？', type: 'yn' },
-    { id: 'customer_activities', type: 'customer_activities_list', showIf: { id: 'had_customer_contact', value: 'y' } },
-    { id: 'did_sideproject', text: '今日、副業(AI開発)に取り組んだ？', type: 'yn' },
-    { id: 'side_project', type: 'side_project_block', showIf: { id: 'did_sideproject', value: 'y' } },
-    { id: 'failure', type: 'failure_block' },
-    { id: 'good', type: 'good_block' },
-    { id: 'tomorrow_plan', text: '明日の仕事の予定は？', type: 'textarea' },
-    { id: 'artists', type: 'artists_list' },
-  ],
-};
-
 // ---- 状態 ----
 const date = todayString();
 let answers = {
@@ -110,12 +93,6 @@ function obsidianURI(filePath, content) {
 }
 
 // ---- 共通: 入力ヘルパー ----
-function makeFieldLabel(text) {
-  const el = document.createElement('div');
-  el.className = 'order-field-label';
-  el.textContent = text;
-  return el;
-}
 function autosize(el) {
   el.style.height = 'auto';
   el.style.height = el.scrollHeight + 'px';
@@ -173,29 +150,23 @@ function makeInput(value, onChange, opts = {}) {
   }
   return el;
 }
-function makeChip(label, selected, onClick) {
+function makeChip(label, selected, onClick, multi) {
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'yn-btn' + (selected ? ' selected-y' : '');
+  btn.className = 'chip' + (multi ? ' multi' : '') + (selected ? ' on' : '');
   btn.textContent = label;
-  // .yn-btn の flex: 1 / padding: 14px を上書き(チップは自然幅・小さめパディング)
-  btn.style.flex = '0 0 auto';
-  btn.style.padding = '10px 14px';
-  btn.style.fontSize = '14px';
-  btn.style.margin = '4px 4px 0 0';
   btn.addEventListener('click', onClick);
   return btn;
 }
 function renderSingleChoiceChips(container, options, currentValue, onSelect) {
   const group = document.createElement('div');
-  group.style.display = 'flex';
-  group.style.flexWrap = 'wrap';
+  group.className = 'chips';
   let selected = currentValue || '';
   const chips = [];
   options.forEach(opt => {
     const chip = makeChip(opt, selected === opt, () => {
       selected = selected === opt ? '' : opt;
-      chips.forEach(c => c.classList.toggle('selected-y', c.dataset.value === selected));
+      chips.forEach(c => c.classList.toggle('on', c.dataset.value === selected));
       onSelect(selected);
     });
     chip.dataset.value = opt;
@@ -208,15 +179,14 @@ function renderSingleChoiceChips(container, options, currentValue, onSelect) {
 function renderMultiChoiceChips(container, options, currentValues, onChange) {
   const values = Array.isArray(currentValues) ? [...currentValues] : [];
   const group = document.createElement('div');
-  group.style.display = 'flex';
-  group.style.flexWrap = 'wrap';
+  group.className = 'chips';
   options.forEach(opt => {
     const chip = makeChip(opt, values.includes(opt), () => {
       const idx = values.indexOf(opt);
       if (idx >= 0) values.splice(idx, 1); else values.push(opt);
-      chip.classList.toggle('selected-y', values.includes(opt));
+      chip.classList.toggle('on', values.includes(opt));
       onChange([...values]);
-    });
+    }, true);
     group.appendChild(chip);
   });
   container.appendChild(group);
@@ -495,406 +465,423 @@ function addSaveLink(container, label, filePath, content) {
   return a;
 }
 
-// ---- レンダラー: scale5(1-5 段階ゲージ) ----
-// 各ボタンに「5 本の縦バー、最初の level 本だけ塗る」アイコン + 数字 + 言葉ラベルを表示。
-// SF Symbols の chart.bar / gauge 系の見せ方を踏襲。
-function energyGaugeSvg(level) {
-  const heights = [5, 8, 11, 14, 17];
-  const bars = [1, 2, 3, 4, 5].map(idx => {
-    const filled = idx <= level;
-    const h = heights[idx - 1];
-    const y = 18 - h;
-    const fillCls = filled ? 'scale5-bar scale5-bar-on' : 'scale5-bar scale5-bar-off';
-    return `<rect class="${fillCls}" x="${(idx - 1) * 5 + 1}" y="${y}" width="3" height="${h}" rx="1"/>`;
-  }).join('');
-  return `<svg width="26" height="18" viewBox="0 0 26 18" aria-hidden="true">${bars}</svg>`;
+// ============================================================
+//  Washi craft-futurism レンダリング層
+//  セクション = アイコン + 明朝見出し + すりガラスカード。
+//  データ構造 / 保存ロジック(上部)は一切変更していない。
+// ============================================================
+
+// ---- SVG パーツ ----
+const TICK_SVG = '<svg class="tick" viewBox="0 0 20 20" fill="none"><path d="M4 10.5l4 4 8-9" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const PLUS_SVG = '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 2v11M2 7.5h11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+const TRASH_SVG = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2.5 4h11M6 4V2.6h4V4M4 4l.6 9.4h6.8L12 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+const SECTION_ICONS = {
+  mood: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M4 18l4-6 4 3 4-7 4 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  work: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="7" width="18" height="13" rx="2.4" stroke="currentColor" stroke-width="2"/><path d="M8.5 7V5.5A1.5 1.5 0 0110 4h4a1.5 1.5 0 011.5 1.5V7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  customer: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="currentColor" stroke-width="2"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  side: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3l2.4 5.2 5.6.6-4.2 3.8 1.2 5.6L12 15.6 7 18.8l1.2-5.6L4 9.4l5.6-.6L12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+  review: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.5 8.5 0 11-3.3-6.7M21 4v4h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  plan: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="16" rx="3" stroke="currentColor" stroke-width="2"/><path d="M4 9h16M8 3v4M16 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  artist: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v15.5L5.5 18A1.5 1.5 0 014 16.5v-11ZM20 5.5C20 4.7 19.3 4 18.5 4H13v15.5L18.5 18a1.5 1.5 0 001.5-1.5v-11Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+};
+
+const SECTION_META = [
+  { id: 'mood', icon: 'mood', title: '今日の調子' },
+  { id: 'work', icon: 'work', title: '仕事' },
+  { id: 'customer', icon: 'customer', title: '顧客活動' },
+  { id: 'side', icon: 'side', title: '副業 / AI開発' },
+  { id: 'review', icon: 'review', title: 'ふりかえり' },
+  { id: 'plan', icon: 'plan', title: '明日の計画' },
+  { id: 'artist', icon: 'artist', title: '覚える作家' },
+];
+
+// ---- UI プリミティブ ----
+function makeSectionCard(meta) {
+  const card = document.createElement('section');
+  card.className = 'card';
+  card.id = `card-${meta.id}`;
+
+  const head = document.createElement('div');
+  head.className = 'section-head';
+  const ic = document.createElement('span');
+  ic.className = 'section-ic';
+  ic.innerHTML = SECTION_ICONS[meta.icon];
+  const title = document.createElement('span');
+  title.className = 'section-title';
+  title.textContent = meta.title;
+  const sub = document.createElement('span');
+  sub.className = 'section-sub';
+  head.append(ic, title, sub);
+  card.appendChild(head);
+
+  const body = document.createElement('div');
+  card.appendChild(body);
+
+  card._sub = sub;
+  card._body = body;
+  return card;
 }
 
-function renderScale5InCard(section, q, card) {
-  const lbl = document.createElement('div');
-  lbl.className = 'question-label';
-  lbl.textContent = q.text;
-  card.appendChild(lbl);
+function gateQ(text) {
+  const p = document.createElement('p');
+  p.className = 'gate-q';
+  p.textContent = text;
+  return p;
+}
 
-  const group = document.createElement('div');
-  group.className = 'yn-group scale5-group';
-  for (let i = 1; i <= 5; i++) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'yn-btn scale5-btn';
-    btn.setAttribute('aria-label', `エネルギー ${ENERGY_LABELS[i - 1]} ${i}/5`);
-    btn.innerHTML = `${energyGaugeSvg(i)}<span class="scale5-num">${i}</span>`;
-    if ((answers[section] || {})[q.id] === i) btn.classList.add('selected-y');
-    btn.addEventListener('click', () => {
-      answers[section] = answers[section] || {};
-      answers[section][q.id] = i;
-      persist();
-      group.querySelectorAll('.yn-btn').forEach(b => b.classList.remove('selected-y'));
-      btn.classList.add('selected-y');
+function makeField(labelText, opt) {
+  const f = document.createElement('div');
+  f.className = 'field';
+  const l = document.createElement('div');
+  l.className = 'field-label';
+  l.textContent = labelText;
+  if (opt) {
+    const o = document.createElement('span');
+    o.className = 'opt';
+    o.textContent = opt;
+    l.appendChild(o);
+  }
+  f.appendChild(l);
+  return f;
+}
+
+function makeSeg(value, onChange) {
+  const g = document.createElement('div');
+  g.className = 'seg';
+  const mk = (val, label, cls) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = cls + (value === val ? ' on' : '');
+    b.innerHTML = TICK_SVG + '<span>' + label + '</span>';
+    b.addEventListener('click', () => onChange(val));
+    return b;
+  };
+  g.append(mk('y', 'はい', 'yes'), mk('n', 'いいえ', 'no'));
+  return g;
+}
+
+function makeGauge(value, onChange) {
+  const H = [8, 11, 14, 18, 22];
+  const g = document.createElement('div');
+  g.className = 'gauge';
+  const btns = [];
+  [1, 2, 3, 4, 5].forEach(n => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = value === n ? 'on' : '';
+    b.setAttribute('aria-label', `エネルギー ${ENERGY_LABELS[n - 1]} ${n}/5`);
+    const bars = document.createElement('span');
+    bars.className = 'bars';
+    [0, 1, 2, 3, 4].forEach(k => {
+      const i = document.createElement('i');
+      if (k < n) i.className = 'lit';
+      i.style.height = H[k] + 'px';
+      bars.appendChild(i);
     });
-    group.appendChild(btn);
-  }
-  card.appendChild(group);
-}
-
-// ---- レンダラー: 仕事リスト(事業カテゴリ・所要時間・学び・学びタグ付き) ----
-function renderWorksInCard(section, card) {
-  function getWorks() {
-    if (!answers[section]) answers[section] = {};
-    if (!answers[section].works || answers[section].works.length === 0) answers[section].works = [{}];
-    return answers[section].works;
-  }
-  function refresh() {
-    card.innerHTML = '';
-    const works = getWorks();
-    works.forEach((work, i) => {
-      const item = document.createElement('div');
-      item.className = 'order-item';
-
-      const header = document.createElement('div');
-      header.className = 'order-item-header';
-      const num = document.createElement('span');
-      num.textContent = works.length > 1 ? `仕事 ${i + 1}` : '仕事';
-      header.appendChild(num);
-      if (works.length > 1) {
-        const del = document.createElement('button');
-        del.textContent = '削除';
-        del.className = 'order-delete-btn';
-        del.addEventListener('click', () => { works.splice(i, 1); persist(); refresh(); });
-        header.appendChild(del);
-      }
-      item.appendChild(header);
-
-      // 事業カテゴリ
-      item.appendChild(makeFieldLabel('事業カテゴリ'));
-      renderSingleChoiceChips(item, BUSINESS_CATEGORIES, work.category, (v) => { work.category = v; persist(); });
-
-      // 内容
-      item.appendChild(makeFieldLabel('どんな仕事をした？'));
-      item.appendChild(makeInput(work.content, (v) => { work.content = v; persist(); }, { tag: 'textarea' }));
-
-      // 所要時間
-      item.appendChild(makeFieldLabel('所要時間（分・任意）'));
-      item.appendChild(makeInput(work.duration, (v) => { work.duration = v; persist(); }, { inputType: 'number', min: 0, placeholder: '例: 60' }));
-
-      // 学び
-      item.appendChild(makeFieldLabel('学んだことは？（任意）'));
-      item.appendChild(makeInput(work.learning, (v) => { work.learning = v; persist(); }, { tag: 'textarea' }));
-
-      // 学びタグ
-      item.appendChild(makeFieldLabel('学びのカテゴリ（任意・複数選択可）'));
-      renderMultiChoiceChips(item, LEARNING_TAGS, work.learning_tags || [], (vs) => { work.learning_tags = vs; persist(); });
-
-      if (i < works.length - 1) {
-        item.style.borderBottom = '1px solid var(--border)';
-        item.style.paddingBottom = '16px';
-      }
-      card.appendChild(item);
+    const lab = document.createElement('span');
+    lab.className = 'glabel';
+    lab.textContent = ENERGY_LABELS[n - 1];
+    b.append(bars, lab);
+    b.addEventListener('click', () => {
+      btns.forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      onChange(n);
     });
-
-    const addBtn = document.createElement('button');
-    addBtn.textContent = '＋ 仕事を追加';
-    addBtn.className = 'add-order-btn';
-    addBtn.addEventListener('click', () => { getWorks().push({}); persist(); refresh(); });
-    card.appendChild(addBtn);
-  }
-  refresh();
-}
-
-// ---- レンダラー: 顧客活動リスト ----
-function renderCustomerActivitiesInCard(section, card) {
-  function getList() {
-    if (!answers[section]) answers[section] = {};
-    if (!answers[section].customer_activities || answers[section].customer_activities.length === 0) {
-      answers[section].customer_activities = [{}];
-    }
-    return answers[section].customer_activities;
-  }
-  function refresh() {
-    card.innerHTML = '';
-    const list = getList();
-    list.forEach((c, i) => {
-      const item = document.createElement('div');
-      item.className = 'order-item';
-
-      const header = document.createElement('div');
-      header.className = 'order-item-header';
-      const num = document.createElement('span');
-      num.textContent = list.length > 1 ? `活動 ${i + 1}` : '活動';
-      header.appendChild(num);
-      if (list.length > 1) {
-        const del = document.createElement('button');
-        del.textContent = '削除';
-        del.className = 'order-delete-btn';
-        del.addEventListener('click', () => { list.splice(i, 1); persist(); refresh(); });
-        header.appendChild(del);
-      }
-      item.appendChild(header);
-
-      item.appendChild(makeFieldLabel('お客様の名前は？'));
-      item.appendChild(makeInput(c.name, (v) => { c.name = v; persist(); }));
-
-      item.appendChild(makeFieldLabel('活動の種別'));
-      renderSingleChoiceChips(item, CUSTOMER_ACTIVITY_TYPES, c.activity_type, (v) => { c.activity_type = v; persist(); });
-
-      item.appendChild(makeFieldLabel('内容'));
-      item.appendChild(makeInput(c.content, (v) => { c.content = v; persist(); }, { tag: 'textarea' }));
-
-      item.appendChild(makeFieldLabel('金額（任意）'));
-      item.appendChild(makeInput(c.price, (v) => { c.price = v; persist(); }, { placeholder: '例: 16,500円' }));
-
-      if (i < list.length - 1) {
-        item.style.borderBottom = '1px solid var(--border)';
-        item.style.paddingBottom = '16px';
-      }
-      card.appendChild(item);
-    });
-
-    const addBtn = document.createElement('button');
-    addBtn.textContent = '＋ 顧客活動を追加';
-    addBtn.className = 'add-order-btn';
-    addBtn.addEventListener('click', () => { getList().push({}); persist(); refresh(); });
-    card.appendChild(addBtn);
-  }
-  refresh();
-}
-
-// ---- レンダラー: 副業ブロック ----
-function renderSideProjectBlock(section, card) {
-  if (!answers[section]) answers[section] = {};
-  if (!answers[section].side_project) answers[section].side_project = {};
-  const sp = answers[section].side_project;
-
-  const title = document.createElement('div');
-  title.className = 'question-label';
-  title.textContent = '副業(AI開発)の今日';
-  card.appendChild(title);
-
-  card.appendChild(makeFieldLabel('今日やった内容'));
-  card.appendChild(makeInput(sp.content, (v) => { sp.content = v; persist(); }, { tag: 'textarea' }));
-
-  card.appendChild(makeFieldLabel('進捗（1-5）'));
-  const group = document.createElement('div');
-  group.className = 'yn-group';
-  for (let i = 1; i <= 5; i++) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'yn-btn';
-    btn.textContent = String(i);
-    if (sp.progress === i) btn.classList.add('selected-y');
-    btn.addEventListener('click', () => {
-      sp.progress = i;
-      persist();
-      group.querySelectorAll('.yn-btn').forEach(b => b.classList.remove('selected-y'));
-      btn.classList.add('selected-y');
-    });
-    group.appendChild(btn);
-  }
-  card.appendChild(group);
-
-  card.appendChild(makeFieldLabel('次の一歩(1行1項目で書くと箇条書きになります)'));
-  card.appendChild(makeInput(sp.next_step, (v) => { sp.next_step = v; persist(); }, { tag: 'textarea', placeholder: '例:\n作家名を覚える仕組みを作る\nカテゴリのバグを直す' }));
-}
-
-// ---- レンダラー: 失敗/良かったこと ブロック(共通) ----
-function renderReviewBlock(section, card, key, labelText, placeholder) {
-  if (!answers[section]) answers[section] = {};
-  if (!answers[section][key] || typeof answers[section][key] !== 'object') {
-    answers[section][key] = { text: '', tags: [] };
-  }
-  const data = answers[section][key];
-  if (!Array.isArray(data.tags)) data.tags = [];
-
-  const title = document.createElement('div');
-  title.className = 'question-label';
-  title.textContent = labelText;
-  card.appendChild(title);
-
-  card.appendChild(makeInput(data.text, (v) => { data.text = v; persist(); }, { tag: 'textarea', placeholder }));
-
-  card.appendChild(makeFieldLabel('カテゴリ（任意・複数選択可）'));
-  renderMultiChoiceChips(card, REVIEW_TAGS, data.tags, (vs) => { data.tags = vs; persist(); });
-}
-
-// ---- レンダラー: 作家リスト(時代・分野付き) ----
-function renderArtistsInCard(section, card) {
-  function getArtists() {
-    if (!answers[section]) answers[section] = {};
-    if (!answers[section].artists || answers[section].artists.length === 0) answers[section].artists = [{}];
-    return answers[section].artists;
-  }
-  function refresh() {
-    card.innerHTML = '';
-    const title = document.createElement('div');
-    title.className = 'question-label';
-    title.textContent = '覚える作家';
-    card.appendChild(title);
-
-    const artists = getArtists();
-    artists.forEach((artist, i) => {
-      const item = document.createElement('div');
-      item.className = 'order-item';
-
-      if (artists.length > 1) {
-        const header = document.createElement('div');
-        header.className = 'order-item-header';
-        const num = document.createElement('span');
-        num.textContent = `作家 ${i + 1}`;
-        header.appendChild(num);
-        const del = document.createElement('button');
-        del.textContent = '削除';
-        del.className = 'order-delete-btn';
-        del.addEventListener('click', () => { artists.splice(i, 1); persist(); refresh(); });
-        header.appendChild(del);
-        item.appendChild(header);
-      }
-
-      item.appendChild(makeFieldLabel('作家名'));
-      item.appendChild(makeInput(artist.name, (v) => { artist.name = v; persist(); }));
-
-      item.appendChild(makeFieldLabel('よみ（ひらがな）'));
-      item.appendChild(makeInput(artist.yomi, (v) => { artist.yomi = v; persist(); }));
-
-      item.appendChild(makeFieldLabel('時代'));
-      renderSingleChoiceChips(item, ARTIST_ERAS, artist.era, (v) => { artist.era = v; persist(); });
-
-      item.appendChild(makeFieldLabel('分野'));
-      renderSingleChoiceChips(item, ARTIST_FIELDS, artist.field, (v) => { artist.field = v; persist(); });
-
-      item.appendChild(makeFieldLabel('メモ'));
-      item.appendChild(makeInput(artist.memo, (v) => { artist.memo = v; persist(); }, { tag: 'textarea' }));
-
-      if (i < artists.length - 1) {
-        item.style.borderBottom = '1px solid var(--border)';
-        item.style.paddingBottom = '16px';
-      }
-      card.appendChild(item);
-    });
-
-    const addBtn = document.createElement('button');
-    addBtn.textContent = '＋ 作家を追加';
-    addBtn.className = 'add-order-btn';
-    addBtn.addEventListener('click', () => { getArtists().push({}); persist(); refresh(); });
-    card.appendChild(addBtn);
-  }
-  refresh();
-}
-
-// ---- 質問レンダリング ----
-function applyVisibility(section) {
-  QUESTIONS[section].forEach(q => {
-    if (!q.showIf) return;
-    const card = document.getElementById(`card-${section}-${q.id}`);
-    if (!card) return;
-    const parentVal = (answers[section] || {})[q.showIf.id];
-    card.classList.toggle('hidden', parentVal !== q.showIf.value);
+    btns.push(b);
+    g.appendChild(b);
   });
+  return g;
 }
 
+function makeSubItem(index, count, label, onDelete) {
+  const d = document.createElement('div');
+  d.className = 'subitem reveal';
+  if (count > 1) {
+    const head = document.createElement('div');
+    head.className = 'subitem-head';
+    const no = document.createElement('span');
+    no.className = 'subitem-no';
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = String(index + 1);
+    no.appendChild(badge);
+    no.appendChild(document.createTextNode(label));
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'del-btn';
+    del.innerHTML = TRASH_SVG + '削除';
+    del.addEventListener('click', onDelete);
+    head.append(no, del);
+    d.appendChild(head);
+  }
+  return d;
+}
+
+function makeAddBtn(label, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'add-btn';
+  b.innerHTML = PLUS_SVG + '<span>' + label + '</span>';
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+// ---- セクション参照(サブ見出しの更新と再描画用) ----
+const sectionRefs = {};
+function sectionSub(id) {
+  const w = answers.WORK || {};
+  switch (id) {
+    case 'mood': return w.energy ? `${ENERGY_LABELS[w.energy - 1]} · ${w.energy}/5` : '未入力';
+    case 'work': return w.did_work === 'y' ? `${(w.works || []).length}件` : '';
+    case 'customer': return w.had_customer_contact === 'y' ? `${(w.customer_activities || []).length}件` : '';
+    case 'artist': return `${(w.artists || []).length}名`;
+    default: return '';
+  }
+}
+function refreshSub(id) {
+  if (sectionRefs[id]) sectionRefs[id].sub.textContent = sectionSub(id);
+}
+
+// ---- ビルダー: 調子 ----
+function buildMood(body) {
+  body.innerHTML = '';
+  const w = answers.WORK;
+  body.appendChild(makeGauge(w.energy, (n) => {
+    w.energy = n; persist(); refreshSub('mood');
+  }));
+}
+
+// ---- ビルダー: 仕事 ----
+function fillWorkReveal(reveal) {
+  reveal.innerHTML = '';
+  const w = answers.WORK;
+  if (w.did_work !== 'y') return;
+  reveal.classList.add('reveal');
+  if (!w.works || w.works.length === 0) w.works = [{}];
+  const works = w.works;
+  works.forEach((work, i) => {
+    const si = makeSubItem(i, works.length, '仕事', () => {
+      works.splice(i, 1); persist(); fillWorkReveal(reveal); refreshSub('work');
+    });
+    let f = makeField('事業カテゴリ');
+    renderSingleChoiceChips(f, BUSINESS_CATEGORIES, work.category, (v) => { work.category = v; persist(); });
+    si.appendChild(f);
+
+    f = makeField('どんな仕事をした？');
+    f.appendChild(makeInput(work.content, (v) => { work.content = v; persist(); }, { tag: 'textarea', placeholder: '今日の作業を書き留めましょう…' }));
+    si.appendChild(f);
+
+    f = makeField('所要時間', '分・任意');
+    f.appendChild(makeInput(work.duration, (v) => { work.duration = v; persist(); }, { inputType: 'number', min: 0, placeholder: '例: 60' }));
+    si.appendChild(f);
+
+    f = makeField('学んだことは？', '任意');
+    f.appendChild(makeInput(work.learning, (v) => { work.learning = v; persist(); }, { tag: 'textarea', placeholder: '気づきや学びをひとつ…' }));
+    si.appendChild(f);
+
+    f = makeField('学びのカテゴリ', '複数選択可');
+    renderMultiChoiceChips(f, LEARNING_TAGS, work.learning_tags || [], (vs) => { work.learning_tags = vs; persist(); });
+    si.appendChild(f);
+
+    reveal.appendChild(si);
+  });
+  reveal.appendChild(makeAddBtn('仕事を追加', () => {
+    works.push({}); persist(); fillWorkReveal(reveal); refreshSub('work');
+  }));
+}
+function buildWork(body) {
+  body.innerHTML = '';
+  const w = answers.WORK;
+  body.appendChild(gateQ('今日は仕事をした？'));
+  const reveal = document.createElement('div');
+  body.appendChild(makeSeg(w.did_work, (v) => {
+    w.did_work = v; persist(); fillWorkReveal(reveal); refreshSub('work');
+  }));
+  body.appendChild(reveal);
+  fillWorkReveal(reveal);
+}
+
+// ---- ビルダー: 顧客活動 ----
+function fillCustomerReveal(reveal) {
+  reveal.innerHTML = '';
+  const w = answers.WORK;
+  if (w.had_customer_contact !== 'y') return;
+  reveal.classList.add('reveal');
+  if (!w.customer_activities || w.customer_activities.length === 0) w.customer_activities = [{}];
+  const list = w.customer_activities;
+  list.forEach((c, i) => {
+    const si = makeSubItem(i, list.length, '活動', () => {
+      list.splice(i, 1); persist(); fillCustomerReveal(reveal); refreshSub('customer');
+    });
+    let f = makeField('お客様の名前は？');
+    f.appendChild(makeInput(c.name, (v) => { c.name = v; persist(); }, { placeholder: '例: 山田様' }));
+    si.appendChild(f);
+
+    f = makeField('活動の種別');
+    renderSingleChoiceChips(f, CUSTOMER_ACTIVITY_TYPES, c.activity_type, (v) => { c.activity_type = v; persist(); });
+    si.appendChild(f);
+
+    f = makeField('内容');
+    f.appendChild(makeInput(c.content, (v) => { c.content = v; persist(); }, { tag: 'textarea', placeholder: 'やり取りの内容…' }));
+    si.appendChild(f);
+
+    f = makeField('金額', '任意');
+    f.appendChild(makeInput(c.price, (v) => { c.price = v; persist(); }, { placeholder: '例: 16,500円' }));
+    si.appendChild(f);
+
+    reveal.appendChild(si);
+  });
+  reveal.appendChild(makeAddBtn('顧客活動を追加', () => {
+    list.push({}); persist(); fillCustomerReveal(reveal); refreshSub('customer');
+  }));
+}
+function buildCustomer(body) {
+  body.innerHTML = '';
+  const w = answers.WORK;
+  body.appendChild(gateQ('今日、顧客とのやり取りはあった？'));
+  const reveal = document.createElement('div');
+  body.appendChild(makeSeg(w.had_customer_contact, (v) => {
+    w.had_customer_contact = v; persist(); fillCustomerReveal(reveal); refreshSub('customer');
+  }));
+  body.appendChild(reveal);
+  fillCustomerReveal(reveal);
+}
+
+// ---- ビルダー: 副業 / AI ----
+function fillSideReveal(reveal) {
+  reveal.innerHTML = '';
+  const w = answers.WORK;
+  if (w.did_sideproject !== 'y') return;
+  reveal.classList.add('reveal');
+  if (!w.side_project) w.side_project = {};
+  const sp = w.side_project;
+
+  let f = makeField('今日やった内容');
+  f.appendChild(makeInput(sp.content, (v) => { sp.content = v; persist(); }, { tag: 'textarea', placeholder: '実装・検証したこと…' }));
+  reveal.appendChild(f);
+
+  f = makeField('進捗', '1〜5');
+  const row = document.createElement('div');
+  row.className = 'chips';
+  [1, 2, 3, 4, 5].forEach(n => {
+    const b = makeChip(String(n), sp.progress === n, () => {
+      sp.progress = n; persist();
+      row.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+    }, true);
+    b.style.minWidth = '44px';
+    b.style.justifyContent = 'center';
+    row.appendChild(b);
+  });
+  f.appendChild(row);
+  reveal.appendChild(f);
+
+  f = makeField('次の一歩', '1行1項目');
+  f.appendChild(makeInput(sp.next_step, (v) => { sp.next_step = v; persist(); }, { tag: 'textarea', placeholder: '例:\n作家名を覚える仕組みを作る\nカテゴリのバグを直す' }));
+  reveal.appendChild(f);
+}
+function buildSide(body) {
+  body.innerHTML = '';
+  const w = answers.WORK;
+  body.appendChild(gateQ('今日、副業（AI開発）に取り組んだ？'));
+  const reveal = document.createElement('div');
+  body.appendChild(makeSeg(w.did_sideproject, (v) => {
+    w.did_sideproject = v; persist(); fillSideReveal(reveal);
+  }));
+  body.appendChild(reveal);
+  fillSideReveal(reveal);
+}
+
+// ---- ビルダー: ふりかえり ----
+function buildReview(body) {
+  body.innerHTML = '';
+  const w = answers.WORK;
+  if (!w.failure || typeof w.failure !== 'object') w.failure = { text: '', tags: [] };
+  if (!w.good || typeof w.good !== 'object') w.good = { text: '', tags: [] };
+  if (!Array.isArray(w.failure.tags)) w.failure.tags = [];
+  if (!Array.isArray(w.good.tags)) w.good.tags = [];
+
+  const block = (data, labelText, opt, placeholder) => {
+    const f = makeField(labelText, opt);
+    f.appendChild(makeInput(data.text, (v) => { data.text = v; persist(); }, { tag: 'textarea', placeholder }));
+    const tagWrap = document.createElement('div');
+    tagWrap.style.marginTop = '10px';
+    renderMultiChoiceChips(tagWrap, REVIEW_TAGS, data.tags, (vs) => { data.tags = vs; persist(); });
+    f.appendChild(tagWrap);
+    return f;
+  };
+  body.appendChild(block(w.failure, '失敗 / 反省点', '任意', 'うまくいかなかったこと…'));
+  body.appendChild(block(w.good, '今日の良かったこと', '任意', 'うまくいったこと・嬉しかったこと…'));
+}
+
+// ---- ビルダー: 明日の計画 ----
+function buildPlan(body) {
+  body.innerHTML = '';
+  const w = answers.WORK;
+  const f = makeField('明日の仕事の予定は？');
+  f.appendChild(makeInput(w.tomorrow_plan, (v) => { w.tomorrow_plan = v; persist(); }, { tag: 'textarea', placeholder: '明日やることを書き出す…' }));
+  body.appendChild(f);
+}
+
+// ---- ビルダー: 覚える作家 ----
+function buildArtist(body) {
+  body.innerHTML = '';
+  const w = answers.WORK;
+  if (!w.artists || w.artists.length === 0) w.artists = [{}];
+  const list = w.artists;
+  list.forEach((artist, i) => {
+    const si = makeSubItem(i, list.length, '作家', () => {
+      list.splice(i, 1); persist(); buildArtist(body); refreshSub('artist');
+    });
+    let f = makeField('作家名');
+    f.appendChild(makeInput(artist.name, (v) => { artist.name = v; persist(); }, { placeholder: '例: 富岡鉄斎' }));
+    si.appendChild(f);
+
+    f = makeField('よみ', 'ひらがな');
+    f.appendChild(makeInput(artist.yomi, (v) => { artist.yomi = v; persist(); }, { placeholder: '例: とみおかてっさい' }));
+    si.appendChild(f);
+
+    f = makeField('時代');
+    renderSingleChoiceChips(f, ARTIST_ERAS, artist.era, (v) => { artist.era = v; persist(); });
+    si.appendChild(f);
+
+    f = makeField('分野');
+    renderSingleChoiceChips(f, ARTIST_FIELDS, artist.field, (v) => { artist.field = v; persist(); });
+    si.appendChild(f);
+
+    f = makeField('メモ');
+    f.appendChild(makeInput(artist.memo, (v) => { artist.memo = v; persist(); }, { tag: 'textarea', placeholder: '特徴・覚えておきたいこと…' }));
+    si.appendChild(f);
+
+    body.appendChild(si);
+  });
+  body.appendChild(makeAddBtn('作家を追加', () => {
+    list.push({}); persist(); buildArtist(body); refreshSub('artist');
+  }));
+}
+
+const BUILDERS = {
+  mood: buildMood, work: buildWork, customer: buildCustomer,
+  side: buildSide, review: buildReview, plan: buildPlan, artist: buildArtist,
+};
+
+// ---- セクション描画 ----
 function renderSection(section) {
   const container = document.getElementById(`section-${section}`);
   container.innerHTML = '';
+  Object.keys(sectionRefs).forEach(k => delete sectionRefs[k]);
 
-  QUESTIONS[section].forEach(q => {
-    const card = document.createElement('div');
-    card.className = 'question-card' + (q.showIf ? ' hidden' : '');
-    card.id = `card-${section}-${q.id}`;
-
-    switch (q.type) {
-      case 'scale5':
-        renderScale5InCard(section, q, card);
-        container.appendChild(card);
-        return;
-      case 'works_list':
-        renderWorksInCard(section, card);
-        container.appendChild(card);
-        return;
-      case 'customer_activities_list':
-        renderCustomerActivitiesInCard(section, card);
-        container.appendChild(card);
-        return;
-      case 'side_project_block':
-        renderSideProjectBlock(section, card);
-        container.appendChild(card);
-        return;
-      case 'failure_block':
-        renderReviewBlock(section, card, 'failure', '失敗 / 反省点（任意）', '');
-        container.appendChild(card);
-        return;
-      case 'good_block':
-        renderReviewBlock(section, card, 'good', '今日の良かったこと（任意）', '');
-        container.appendChild(card);
-        return;
-      case 'artists_list':
-        renderArtistsInCard(section, card);
-        container.appendChild(card);
-        return;
-    }
-
-    // 単純な質問: yn / textarea / text / number
-    const label = document.createElement('div');
-    label.className = 'question-label';
-    label.textContent = q.text;
-    card.appendChild(label);
-
-    if (q.type === 'yn') {
-      const group = document.createElement('div');
-      group.className = 'yn-group';
-      ['y', 'n'].forEach(val => {
-        const btn = document.createElement('button');
-        btn.className = 'yn-btn';
-        btn.textContent = val === 'y' ? 'はい' : 'いいえ';
-        btn.dataset.val = val;
-        const current = (answers[section] || {})[q.id];
-        if (current === val) btn.classList.add('selected-y');
-        else if (current && current !== val) btn.classList.add('selected-n');
-        btn.addEventListener('click', () => {
-          answers[section] = answers[section] || {};
-          answers[section][q.id] = val;
-          persist();
-          group.querySelectorAll('.yn-btn').forEach(b => b.classList.remove('selected-y', 'selected-n'));
-          btn.classList.add('selected-y');
-          const other = group.querySelector(`[data-val="${val === 'y' ? 'n' : 'y'}"]`);
-          if (other) other.classList.add('selected-n');
-          applyVisibility(section);
-        });
-        group.appendChild(btn);
-      });
-      card.appendChild(group);
-    } else {
-      const isTextarea = q.type === 'textarea';
-      const el = document.createElement(isTextarea ? 'textarea' : 'input');
-      if (!isTextarea) el.type = q.type;
-      el.placeholder = q.placeholder || '';
-      if (q.type === 'number') el.min = 0;
-      const saved = (answers[section] || {})[q.id];
-      if (saved !== undefined) el.value = saved;
-      let timer;
-      const save = () => {
-        answers[section] = answers[section] || {};
-        answers[section][q.id] = el.value;
-        persist();
-      };
-      el.addEventListener('input', () => {
-        if (isTextarea) autosize(el);
-        clearTimeout(timer); timer = setTimeout(save, 800);
-      });
-      el.addEventListener('blur', save);
-      attachFocusScroll(el);
-      if (isTextarea) {
-        requestAnimationFrame(() => autosize(el));
-        attachKbChips(el);
-      }
-      card.appendChild(el);
-    }
-
+  SECTION_META.forEach(meta => {
+    const card = makeSectionCard(meta);
+    sectionRefs[meta.id] = { card, body: card._body, sub: card._sub };
+    BUILDERS[meta.id](card._body);
+    card._sub.textContent = sectionSub(meta.id);
     container.appendChild(card);
   });
-
-  applyVisibility(section);
 }
 
-// ---- タブ切替 ----
+// ---- タブ切替(単一セクション WORK) ----
 function switchTab(section) {
   currentSection = section;
   document.querySelectorAll('.tab-btn').forEach(btn =>
